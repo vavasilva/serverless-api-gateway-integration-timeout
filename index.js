@@ -1,5 +1,5 @@
 'use strict';
 
-const UpdateAPIGatewayIntegrationTimeout = require('./src/updateAPIGatewayIntegrationTimeout');
+const IntegrationTimeout = require('./src/updateAPIGatewayIntegrationTimeout');
 
-module.exports = UpdateAPIGatewayIntegrationTimeout;
+module.exports = IntegrationTimeout;
