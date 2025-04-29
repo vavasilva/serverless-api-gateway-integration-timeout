@@ -1,6 +1,6 @@
 {
   "name": "serverless-api-gateway-integration-timeout",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Serverless Framework plugin to update API Gateway integration timeout",
   "main": "index.js",
   "scripts": {
@@ -10,12 +10,19 @@
     "serverless",
     "serverless-plugin",
     "api-gateway",
-    "timeout"
+    "timeout",
+    "integration-timeout",
+    "lambda-timeout",
+    "llm"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {},
   "peerDependencies": {
     "serverless": ">=2.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/serverless-api-gateway-integration-timeout"
   }
 }

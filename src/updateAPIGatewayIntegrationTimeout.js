@@ -16,6 +16,9 @@ class UpdateAPIGatewayIntegrationTimeout {
     const stage = this.options.stage || service.provider.stage;
     const region = this.options.region || service.provider.region;
     
+    // Check if custom API Gateway ID is provided
+    const customApiId = service.custom?.apiGatewayId;
+    
     // As of June 2024, AWS announced increased timeout limits beyond 29 seconds
     // Default to 120,000 ms (120 seconds) if not specified
     let timeout = service.custom?.apiGatewayIntegrationTimeout || 120000; 
@@ -34,28 +37,68 @@ class UpdateAPIGatewayIntegrationTimeout {
     this.serverless.cli.log(`Updating API Gateway integration timeout to ${timeout} ms`);
     
     try {
-      // Get the REST API ID
-      const stackName = `${service.service}-${stage}`;
-      const describeStacksParams = {
-        StackName: stackName,
-      };
+      // Use custom API ID if provided
+      let restApiId = customApiId;
       
-      const result = await this.provider.request(
-        'CloudFormation',
-        'describeStacks',
-        describeStacksParams,
-        { region }
-      );
-      
-      const restApiOutput = result.Stacks[0].Outputs.find(
-        (output) => output.OutputKey.includes('RestApiId') || output.OutputKey.includes('ApiGatewayRestApi')
-      );
-      
-      if (!restApiOutput) {
-        throw new Error('Could not find REST API ID in CloudFormation stack outputs');
+      if (!restApiId) {
+        // Get the REST API ID from CloudFormation or API Gateway
+        const stackName = `${service.service}-${stage}`;
+        const describeStacksParams = {
+          StackName: stackName,
+        };
+        
+        // Try to get API ID from CloudFormation stack
+        try {
+          const result = await this.provider.request(
+            'CloudFormation',
+            'describeStacks',
+            describeStacksParams,
+            { region }
+          );
+          
+          if (result.Stacks && result.Stacks[0] && result.Stacks[0].Outputs) {
+            const restApiOutput = result.Stacks[0].Outputs.find(
+              (output) => output.OutputKey.includes('RestApiId') || output.OutputKey.includes('ApiGatewayRestApi')
+            );
+            
+            if (restApiOutput) {
+              restApiId = restApiOutput.OutputValue;
+              this.serverless.cli.log(`Found API ID from CloudFormation stack: ${restApiId}`);
+            }
+          }
+        } catch (error) {
+          this.serverless.cli.log(`Error retrieving stack information: ${error.message}`);
+        }
+        
+        // If not found in CloudFormation, try to get from API Gateway
+        if (!restApiId) {
+          try {
+            this.serverless.cli.log('API ID not found in CloudFormation outputs, trying to find from API Gateway...');
+            
+            const apis = await this.provider.request(
+              'APIGateway',
+              'getRestApis',
+              {},
+              { region }
+            );
+            
+            // Try to find the API by name (service-stage)
+            const apiName = `${service.service}-${stage}`;
+            const api = apis.items.find(item => item.name === apiName);
+            
+            if (api) {
+              restApiId = api.id;
+              this.serverless.cli.log(`Found API ID from API Gateway: ${restApiId}`);
+            } else {
+              throw new Error(`Could not find API with name: ${apiName}`);
+            }
+          } catch (error) {
+            throw new Error(`Could not find REST API ID: ${error.message}`);
+          }
+        }
+      } else {
+        this.serverless.cli.log(`Using provided API Gateway ID: ${restApiId}`);
       }
-      
-      const restApiId = restApiOutput.OutputValue;
       
       // Get the API Gateway resources
       const apiGatewayResources = await this.provider.request(
@@ -66,6 +109,7 @@ class UpdateAPIGatewayIntegrationTimeout {
       );
       
       // For each resource, update all methods
+      let updateCount = 0;
       for (const resource of apiGatewayResources.items) {
         if (resource.resourceMethods) {
           for (const method of Object.keys(resource.resourceMethods)) {
@@ -103,10 +147,16 @@ class UpdateAPIGatewayIntegrationTimeout {
                 { region }
               );
               
+              updateCount++;
               this.serverless.cli.log(`Updated timeout for ${method} on resource ${resource.path}`);
             }
           }
         }
+      }
+      
+      if (updateCount === 0) {
+        this.serverless.cli.log('No API Gateway integrations found to update');
+        return;
       }
       
       // Create a new deployment to apply changes
@@ -123,7 +173,7 @@ class UpdateAPIGatewayIntegrationTimeout {
         { region }
       );
       
-      this.serverless.cli.log('Successfully updated API Gateway integration timeout');
+      this.serverless.cli.log(`Successfully updated ${updateCount} API Gateway integration(s) with timeout: ${timeout} ms`);
     } catch (error) {
       this.serverless.cli.log(`Error updating API Gateway integration timeout: ${error.message}`);
       throw error;

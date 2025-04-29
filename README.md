@@ -40,6 +40,26 @@ custom:
 
 If not specified, the plugin will default to 120,000 milliseconds (120 seconds).
 
+## Troubleshooting
+
+If you encounter the error `Could not find REST API ID in CloudFormation stack outputs`, this usually happens when:
+
+1. You're using multiple API Gateway instances
+2. You're using a custom naming convention for your API Gateway
+3. Your serverless deployment doesn't use CloudFormation outputs for the API Gateway
+
+The plugin will attempt to find your API Gateway by:
+1. First checking the CloudFormation stack outputs for the API ID
+2. If not found, it will try to find the API Gateway by its name (service-stage)
+
+If it still cannot find your API Gateway, you can manually specify the API ID in your serverless.yml:
+
+```yaml
+custom:
+  apiGatewayIntegrationTimeout: 120000  # 120 seconds
+  apiGatewayId: abcdef123  # Your API Gateway ID
+```
+
 ## Important Notes
 
 - This plugin only works with full deployments (`serverless deploy`), as it needs to modify the API Gateway after deployment.
@@ -68,6 +88,7 @@ plugins:
 
 custom:
   apiGatewayIntegrationTimeout: 120000  # 120 seconds
+  # apiGatewayId: abcdef123  # Optional: Specify API Gateway ID manually if needed
 
 functions:
   processData:
