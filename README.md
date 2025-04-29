@@ -1,6 +1,6 @@
 # Serverless API Gateway Integration Timeout
 
-A Serverless Framework plugin to modify the API Gateway integration timeout.
+A Serverless Framework plugin to modify the API Gateway integration timeout based on your AWS account's service quota.
 
 ## Problem
 
@@ -35,18 +35,25 @@ Configure the timeout in the custom section of your `serverless.yml`:
 
 ```yaml
 custom:
-  apiGatewayIntegrationTimeout: 29000  # Desired timeout in milliseconds
+  apiGatewayIntegrationTimeout: 60000  # Desired timeout in milliseconds
   apiGatewayMaxTimeout: 60000  # Maximum timeout allowed by your AWS account's service quota
 ```
 
-If not specified, the plugin will default to a timeout of 29,000 milliseconds (29 seconds).
+You can also set just the Lambda timeout in the provider section, and the plugin will automatically use that value (converted to milliseconds):
+
+```yaml
+provider:
+  timeout: 60  # Lambda timeout in seconds - will be used as 60000ms for API Gateway
+```
+
+If no timeout is specified, the plugin will default to a timeout of 29,000 milliseconds (29 seconds).
 
 ## Service Quota and Maximum Timeout
 
 The maximum timeout value depends on your AWS account's service quota:
 
 1. **Standard Limit**: 29,000 milliseconds (29 seconds)
-2. **Extended Limit**: May be increased up to 60,000 or 120,000 milliseconds, depending on your account
+2. **Extended Limit**: May be increased up to 60,000 milliseconds (60 seconds) or 120,000 milliseconds (120 seconds), depending on your account
 
 To increase your service quota:
 1. Go to the [AWS Service Quotas console](https://console.aws.amazon.com/servicequotas/)
@@ -57,9 +64,17 @@ To increase your service quota:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `apiGatewayIntegrationTimeout` | The desired timeout in milliseconds | 29000 |
+| `apiGatewayIntegrationTimeout` | The desired timeout in milliseconds | 29000 or provider.timeout * 1000 |
 | `apiGatewayMaxTimeout` | The maximum timeout allowed by your AWS account's service quota | 29000 |
 | `apiGatewayId` | Optional: Manually specify your API Gateway ID | - |
+
+## Timeout Order of Precedence
+
+The plugin determines the timeout value to set in the following order:
+
+1. `custom.apiGatewayIntegrationTimeout` if defined
+2. `provider.timeout` * 1000 (converting from seconds to milliseconds) if defined
+3. Default value of 29000ms if neither of the above is defined
 
 ## Troubleshooting
 
@@ -72,7 +87,7 @@ This error occurs when your requested timeout exceeds your account's service quo
 
 ```yaml
 custom:
-  apiGatewayIntegrationTimeout: 29000  # Keep within your quota
+  apiGatewayIntegrationTimeout: 60000  # Your desired timeout
   apiGatewayMaxTimeout: 60000  # Set to your account's maximum limit
 ```
 
@@ -94,7 +109,7 @@ If it still cannot find your API Gateway, you can manually specify the API ID in
 
 ```yaml
 custom:
-  apiGatewayIntegrationTimeout: 29000  # Desired timeout
+  apiGatewayIntegrationTimeout: 60000  # Desired timeout
   apiGatewayId: abcdef123  # Your API Gateway ID
 ```
 
@@ -118,18 +133,17 @@ provider:
   name: aws
   runtime: nodejs18.x
   region: us-east-1
-  timeout: 29  # Default Lambda timeout in seconds
+  timeout: 60  # Lambda timeout in seconds - will also be used for API Gateway
 
 plugins:
   - serverless-api-gateway-integration-timeout
 
 custom:
-  # Standard maximum timeout (no service quota increase)
-  apiGatewayIntegrationTimeout: 29000  # 29 seconds
+  # Explicitly set API Gateway timeout if needed
+  # apiGatewayIntegrationTimeout: 60000  # 60 seconds
   
-  # For accounts with service quota increase
-  # apiGatewayIntegrationTimeout: 60000  # 60 seconds 
-  # apiGatewayMaxTimeout: 60000  # Your account's maximum limit
+  # Set the maximum allowed by your account's service quota
+  apiGatewayMaxTimeout: 60000  # Your account's limit
   
   # Optional: Specify API Gateway ID manually if needed
   # apiGatewayId: abcdef123
@@ -137,7 +151,7 @@ custom:
 functions:
   processData:
     handler: handler.processData
-    timeout: 29  # Lambda timeout in seconds
+    timeout: 60  # Lambda timeout in seconds
     events:
       - http:
           path: /process

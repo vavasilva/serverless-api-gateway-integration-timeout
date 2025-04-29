@@ -1,6 +1,6 @@
 {
   "name": "serverless-api-gateway-integration-timeout",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "Serverless Framework plugin to update API Gateway integration timeout based on AWS service quota",
   "main": "index.js",
   "scripts": {

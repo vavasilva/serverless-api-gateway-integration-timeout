@@ -12,33 +12,62 @@ class UpdateAPIGatewayIntegrationTimeout {
   }
 
   async updateIntegrationTimeout() {
+    this.serverless.cli.log('================== API Gateway Timeout Update ==================');
+    
     const service = this.serverless.service;
     const stage = this.options.stage || service.provider.stage;
     const region = this.options.region || service.provider.region;
     
+    this.serverless.cli.log('Checking for custom API Gateway timeout settings...');
+    
+    // Diagnostic information
+    const customSection = service.custom || {};
+    this.serverless.cli.log(`service.custom: ${JSON.stringify(customSection)}`);
+    
     // Check if custom API Gateway ID is provided
-    const customApiId = service.custom?.apiGatewayId;
+    const customApiId = customSection.apiGatewayId;
     
-    // Get the requested timeout value - check both serverless.custom and provider config
-    let requestedTimeout;
+    // Get the requested timeout value with extensive debugging
+    let requestedTimeout = null;
     
-    // First try to get from custom.apiGatewayIntegrationTimeout
-    if (service.custom?.apiGatewayIntegrationTimeout !== undefined) {
-      requestedTimeout = service.custom.apiGatewayIntegrationTimeout;
-    } 
-    // Then check if provider.timeout is set (in seconds)
-    else if (service.provider?.timeout !== undefined) {
-      // Provider timeout is in seconds, convert to milliseconds
-      requestedTimeout = service.provider.timeout * 1000;
-      this.serverless.cli.log(`Using provider.timeout value (${service.provider.timeout}s) converted to ${requestedTimeout}ms`);
-    } 
-    // Fallback to default
-    else {
-      requestedTimeout = 29000;
+    // Try to get from custom.apiGatewayIntegrationTimeout with detailed logging
+    if (customSection.apiGatewayIntegrationTimeout !== undefined) {
+      this.serverless.cli.log(`Found custom.apiGatewayIntegrationTimeout: ${customSection.apiGatewayIntegrationTimeout}`);
+      requestedTimeout = parseInt(customSection.apiGatewayIntegrationTimeout, 10);
+      this.serverless.cli.log(`Parsed value: ${requestedTimeout}`);
+    } else {
+      this.serverless.cli.log('No custom.apiGatewayIntegrationTimeout found');
     }
     
-    // Get the max timeout from custom settings or default to 29000 (AWS standard max)
-    const maxTimeout = service.custom?.apiGatewayMaxTimeout || 29000; 
+    // If not set via custom, check provider timeout
+    if (requestedTimeout === null && service.provider && service.provider.timeout !== undefined) {
+      this.serverless.cli.log(`Using provider.timeout: ${service.provider.timeout} seconds`);
+      // Provider timeout is in seconds, convert to milliseconds
+      requestedTimeout = parseInt(service.provider.timeout, 10) * 1000;
+      this.serverless.cli.log(`Converted to milliseconds: ${requestedTimeout}ms`);
+    }
+    
+    // Fallback to default if still not set
+    if (requestedTimeout === null) {
+      requestedTimeout = 29000;
+      this.serverless.cli.log(`No timeout configuration found, using default: ${requestedTimeout}ms`);
+    }
+    
+    // Get the max timeout with detailed logging
+    let maxTimeout = 29000; // AWS standard default
+    
+    if (customSection.apiGatewayMaxTimeout !== undefined) {
+      this.serverless.cli.log(`Found custom.apiGatewayMaxTimeout: ${customSection.apiGatewayMaxTimeout}`);
+      const parsedMax = parseInt(customSection.apiGatewayMaxTimeout, 10);
+      if (!isNaN(parsedMax)) {
+        maxTimeout = parsedMax;
+        this.serverless.cli.log(`Using configured max timeout: ${maxTimeout}ms`);
+      } else {
+        this.serverless.cli.log(`WARNING: Invalid custom.apiGatewayMaxTimeout value: ${customSection.apiGatewayMaxTimeout}, using default`);
+      }
+    } else {
+      this.serverless.cli.log(`No custom.apiGatewayMaxTimeout found, using default: ${maxTimeout}ms`);
+    }
     
     // Start with the requested timeout
     let timeout = requestedTimeout;
@@ -56,9 +85,12 @@ class UpdateAPIGatewayIntegrationTimeout {
       timeout = maxTimeout;
     }
     
+    // Final timeout value to use
+    this.serverless.cli.log(`Final timeout value to use: ${timeout} ms`);
+    
     // Warn for values above 29000 ms, as they might require account throttle quota adjustments
     if (timeout > 29000) {
-      this.serverless.cli.log(`Notice: You're setting a timeout above the standard 29000 ms (${timeout} ms). This is only possible if your account has the appropriate service quota.`);
+      this.serverless.cli.log(`Notice: You're setting a timeout above the standard 29000 ms. This is only possible if your account has the appropriate service quota.`);
     }
     
     this.serverless.cli.log(`Updating API Gateway integration timeout to ${timeout} ms`);
@@ -70,6 +102,7 @@ class UpdateAPIGatewayIntegrationTimeout {
       if (!restApiId) {
         // Get the REST API ID from CloudFormation or API Gateway
         const stackName = `${service.service}-${stage}`;
+        this.serverless.cli.log(`Searching for API in CloudFormation stack: ${stackName}`);
         const describeStacksParams = {
           StackName: stackName,
         };
@@ -91,7 +124,11 @@ class UpdateAPIGatewayIntegrationTimeout {
             if (restApiOutput) {
               restApiId = restApiOutput.OutputValue;
               this.serverless.cli.log(`Found API ID from CloudFormation stack: ${restApiId}`);
+            } else {
+              this.serverless.cli.log('No API ID found in CloudFormation outputs');
             }
+          } else {
+            this.serverless.cli.log('No CloudFormation stack outputs found');
           }
         } catch (error) {
           this.serverless.cli.log(`Error retrieving stack information: ${error.message}`);
@@ -109,15 +146,39 @@ class UpdateAPIGatewayIntegrationTimeout {
               { region }
             );
             
+            if (apis.items.length === 0) {
+              this.serverless.cli.log('No REST APIs found in the account');
+              throw new Error('No REST APIs found in the account');
+            }
+            
             // Try to find the API by name (service-stage)
             const apiName = `${service.service}-${stage}`;
+            this.serverless.cli.log(`Searching for API with name: ${apiName}`);
+            
             const api = apis.items.find(item => item.name === apiName);
             
             if (api) {
               restApiId = api.id;
               this.serverless.cli.log(`Found API ID from API Gateway: ${restApiId}`);
             } else {
-              throw new Error(`Could not find API with name: ${apiName}`);
+              // If exact match not found, try a less strict approach
+              this.serverless.cli.log('Exact API name match not found, trying partial match');
+              const partialMatches = apis.items.filter(item => 
+                item.name.includes(service.service) && item.name.includes(stage)
+              );
+              
+              if (partialMatches.length > 0) {
+                restApiId = partialMatches[0].id;
+                this.serverless.cli.log(`Found API ID by partial match: ${restApiId} (Name: ${partialMatches[0].name})`);
+              } else {
+                // If we have just one API, use it
+                if (apis.items.length === 1) {
+                  restApiId = apis.items[0].id;
+                  this.serverless.cli.log(`Only one API found in account, using it: ${restApiId} (Name: ${apis.items[0].name})`);
+                } else {
+                  throw new Error(`Could not find API with name: ${apiName}`);
+                }
+              }
             }
           } catch (error) {
             throw new Error(`Could not find REST API ID: ${error.message}`);
@@ -134,6 +195,11 @@ class UpdateAPIGatewayIntegrationTimeout {
         { restApiId },
         { region }
       );
+      
+      if (!apiGatewayResources.items || apiGatewayResources.items.length === 0) {
+        this.serverless.cli.log('No resources found for this API');
+        return;
+      }
       
       // For each resource, update all methods
       let updateCount = 0;
@@ -154,20 +220,21 @@ class UpdateAPIGatewayIntegrationTimeout {
             );
             
             if (methodDetails.methodIntegration) {
-              const updateIntegrationParams = {
-                restApiId,
-                resourceId: resource.id,
-                httpMethod: method,
-                patchOperations: [
-                  {
-                    op: 'replace',
-                    path: '/timeoutInMillis',
-                    value: `${timeout}`,
-                  },
-                ],
-              };
-              
+              // Update the timeout
               try {
+                const updateIntegrationParams = {
+                  restApiId,
+                  resourceId: resource.id,
+                  httpMethod: method,
+                  patchOperations: [
+                    {
+                      op: 'replace',
+                      path: '/timeoutInMillis',
+                      value: `${timeout}`,
+                    },
+                  ],
+                };
+                
                 await this.provider.request(
                   'APIGateway',
                   'updateIntegration',
@@ -214,6 +281,7 @@ class UpdateAPIGatewayIntegrationTimeout {
       );
       
       this.serverless.cli.log(`Successfully updated ${updateCount} API Gateway integration(s) with timeout: ${timeout} ms`);
+      this.serverless.cli.log('=========== API Gateway Timeout Update Complete ===========');
     } catch (error) {
       this.serverless.cli.log(`Error updating API Gateway integration timeout: ${error.message}`);
       throw error;
