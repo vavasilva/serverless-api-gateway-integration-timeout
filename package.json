@@ -1,0 +1,21 @@
+{
+  "name": "serverless-api-gateway-integration-timeout",
+  "version": "1.0.0",
+  "description": "Serverless Framework plugin to update API Gateway integration timeout",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "serverless",
+    "serverless-plugin",
+    "api-gateway",
+    "timeout"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "peerDependencies": {
+    "serverless": ">=2.0.0"
+  }
+}
