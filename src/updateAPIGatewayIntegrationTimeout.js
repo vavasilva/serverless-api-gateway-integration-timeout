@@ -19,9 +19,12 @@ class UpdateAPIGatewayIntegrationTimeout {
     // Check if custom API Gateway ID is provided
     const customApiId = service.custom?.apiGatewayId;
     
-    // As of June 2024, AWS announced increased timeout limits beyond 29 seconds
-    // Default to 120,000 ms (120 seconds) if not specified
-    let timeout = service.custom?.apiGatewayIntegrationTimeout || 120000; 
+    // Default to 29,000 ms if not specified
+    let timeout = service.custom?.apiGatewayIntegrationTimeout || 29000; 
+    
+    // Get the max timeout from custom settings or default to 29000 (AWS standard max)
+    // This should be set according to the Service Quota for the account
+    const maxTimeout = service.custom?.apiGatewayMaxTimeout || 29000; 
     
     // Validate timeout is within AWS limits
     if (timeout < 50) {
@@ -29,9 +32,16 @@ class UpdateAPIGatewayIntegrationTimeout {
       timeout = 50;
     }
     
+    // Check if timeout is above the maximum allowed by account's service quota
+    if (timeout > maxTimeout) {
+      this.serverless.cli.log(`Warning: Your requested timeout (${timeout} ms) exceeds the maximum allowed by your account's service quota (${maxTimeout} ms). Setting to maximum allowed.`);
+      this.serverless.cli.log(`To increase this limit, request a service quota increase in the AWS console: https://console.aws.amazon.com/servicequotas/`);
+      timeout = maxTimeout;
+    }
+    
     // Warn for values above 29000 ms, as they might require account throttle quota adjustments
     if (timeout > 29000) {
-      this.serverless.cli.log(`Notice: You're setting a timeout above 29000 ms (${timeout} ms). This is supported for Regional and Private REST APIs as of June 2024, but may require a reduction in your account-level throttle quota limit.`);
+      this.serverless.cli.log(`Notice: You're setting a timeout above the standard 29000 ms (${timeout} ms). This is only possible if your account has the appropriate service quota.`);
     }
     
     this.serverless.cli.log(`Updating API Gateway integration timeout to ${timeout} ms`);

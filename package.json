@@ -1,7 +1,7 @@
 {
   "name": "serverless-api-gateway-integration-timeout",
-  "version": "1.0.2",
-  "description": "Serverless Framework plugin to update API Gateway integration timeout",
+  "version": "1.0.4",
+  "description": "Serverless Framework plugin to update API Gateway integration timeout based on AWS service quota",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
