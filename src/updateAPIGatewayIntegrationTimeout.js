@@ -19,12 +19,29 @@ class UpdateAPIGatewayIntegrationTimeout {
     // Check if custom API Gateway ID is provided
     const customApiId = service.custom?.apiGatewayId;
     
-    // Default to 29,000 ms if not specified
-    let timeout = service.custom?.apiGatewayIntegrationTimeout || 29000; 
+    // Get the requested timeout value - check both serverless.custom and provider config
+    let requestedTimeout;
+    
+    // First try to get from custom.apiGatewayIntegrationTimeout
+    if (service.custom?.apiGatewayIntegrationTimeout !== undefined) {
+      requestedTimeout = service.custom.apiGatewayIntegrationTimeout;
+    } 
+    // Then check if provider.timeout is set (in seconds)
+    else if (service.provider?.timeout !== undefined) {
+      // Provider timeout is in seconds, convert to milliseconds
+      requestedTimeout = service.provider.timeout * 1000;
+      this.serverless.cli.log(`Using provider.timeout value (${service.provider.timeout}s) converted to ${requestedTimeout}ms`);
+    } 
+    // Fallback to default
+    else {
+      requestedTimeout = 29000;
+    }
     
     // Get the max timeout from custom settings or default to 29000 (AWS standard max)
-    // This should be set according to the Service Quota for the account
     const maxTimeout = service.custom?.apiGatewayMaxTimeout || 29000; 
+    
+    // Start with the requested timeout
+    let timeout = requestedTimeout;
     
     // Validate timeout is within AWS limits
     if (timeout < 50) {
@@ -150,15 +167,28 @@ class UpdateAPIGatewayIntegrationTimeout {
                 ],
               };
               
-              await this.provider.request(
-                'APIGateway',
-                'updateIntegration',
-                updateIntegrationParams,
-                { region }
-              );
-              
-              updateCount++;
-              this.serverless.cli.log(`Updated timeout for ${method} on resource ${resource.path}`);
+              try {
+                await this.provider.request(
+                  'APIGateway',
+                  'updateIntegration',
+                  updateIntegrationParams,
+                  { region }
+                );
+                
+                updateCount++;
+                this.serverless.cli.log(`Updated timeout for ${method} on resource ${resource.path}`);
+              } catch (error) {
+                if (error.message && error.message.includes('between 50 ms and')) {
+                  const match = error.message.match(/between 50 ms and (\d+) ms/);
+                  if (match && match[1]) {
+                    const actualMaxTimeout = parseInt(match[1], 10);
+                    this.serverless.cli.log(`ERROR: Your account's maximum allowed timeout is ${actualMaxTimeout} ms.`);
+                    this.serverless.cli.log(`Please update your configuration with: apiGatewayMaxTimeout: ${actualMaxTimeout}`);
+                    throw new Error(`Timeout exceeds your account's service quota limit of ${actualMaxTimeout} ms`);
+                  }
+                }
+                throw error;
+              }
             }
           }
         }
