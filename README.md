@@ -15,7 +15,11 @@ This plugin automatically updates the API Gateway integration timeout after depl
 ## Installation
 
 ```bash
+# Using npm
 npm install --save-dev serverless-api-gateway-integration-timeout
+
+# Using Serverless plugin install
+serverless plugin install -n serverless-api-gateway-integration-timeout
 ```
 
 ## Usage

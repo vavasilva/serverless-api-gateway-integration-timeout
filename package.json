@@ -1,6 +1,6 @@
 {
   "name": "serverless-api-gateway-integration-timeout",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Serverless Framework plugin to update API Gateway integration timeout",
   "main": "index.js",
   "scripts": {
