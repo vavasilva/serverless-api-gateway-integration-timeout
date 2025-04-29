@@ -1,6 +1,6 @@
 {
   "name": "serverless-api-gateway-integration-timeout",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Serverless Framework plugin to set API Gateway integration timeout directly in http events",
   "main": "index.js",
   "scripts": {
@@ -26,6 +26,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/user/serverless-api-gateway-integration-timeout"
+    "url": "https://github.com/vavasilva/serverless-api-gateway-integration-timeout"
   }
 }
