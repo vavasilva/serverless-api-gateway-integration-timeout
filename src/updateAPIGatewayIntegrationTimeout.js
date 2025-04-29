@@ -1,5 +1,11 @@
 'use strict';
 
+/**
+ * Serverless API Gateway Integration Timeout Plugin
+ * Based on the solution provided by johan1252 in GitHub issue:
+ * https://github.com/serverless/serverless/issues/12800#issuecomment-2357708720
+ */
+
 const assert = require("node:assert");
 const Klass = require("serverless/lib/plugins/aws/package/compile/events/api-gateway");
 

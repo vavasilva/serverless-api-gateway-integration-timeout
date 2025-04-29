@@ -16,6 +16,9 @@
     "llm"
   ],
   "author": "",
+  "contributors": [
+    "johan1252 (https://github.com/johan1252)"
+  ],
   "license": "MIT",
   "dependencies": {},
   "peerDependencies": {

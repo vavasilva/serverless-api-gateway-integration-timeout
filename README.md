@@ -2,6 +2,8 @@
 
 A lightweight Serverless Framework plugin that adds support for setting API Gateway integration timeouts directly in HTTP events.
 
+> This plugin was inspired by [serverless/serverless#12800](https://github.com/serverless/serverless/issues/12800#issuecomment-2357708720) and the solution provided by [johan1252](https://github.com/johan1252) and other contributors.
+
 ## Problem
 
 By default, Amazon API Gateway has an integration timeout limit of 29 seconds (29,000 milliseconds). This can be too short for more complex or resource-intensive operations.
